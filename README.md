@@ -95,7 +95,7 @@ Save this data as a `bill` table in the same dataset by using the save button be
 
 <img src="./Images/ss3.png" alt="result"/>
 
-### Compute for recency, frequency and monetary values per customer :
+## Compute for recency, frequency and monetary values per customer :
 
 - For monetary, this is just a simple sum of sales,
 - while for frequency, this is a count of distinct invoice numbers per customer for the time they have been a customer ie: the number of separate purchases/ num
@@ -151,6 +151,119 @@ FROM rfm
 Output
 <img src="./Images/ss5.png" alt="result"/>
 
-Now that we have the RFM data we can save it as another table named `RFM`.
+Now that we have the RFM data we can save it as another table named `rfm`.
 
+## Determine quintiles for each RFM metric
+
+The next step would be to group the customers into quintiles in terms of their RFM values — we divide the customers into 5 equal groups, according to how high and low  they scored in the RFM metrics.
+The main advantage of using percentile is we do not have to change or set the values. It will be automatically calculated.
+
+#### What is a Quintile?
+- A quintile is a 1/5th (20 percent) portion of the whole. In statistics, it’s a population or sample divided into five equal groups, according to values of a
+particular variable. Quintiles are like percentiles, but instead of dividing the data into 100 parts, you divide it in 5 equal parts. Quintiles work with any industry
+since the data itself defines the ranges; they distribute customers evenly. We do this for each of recency, frequency and monetary values per customer.
+
+I used BigQuery’s APPROX_QUANTILES() to achieve this.
+
+#### How does APPROX_QUANTILES() work?
+
+- Returns the approximate boundaries for a group of expression values, where number represents the number of quantiles to create.
+- This function returns an array of number+1 elements, where the first element is the approximate minimum and the last element is the approximate maximum.
+
+NOTE : Approximate aggregate functions are scalable in terms of memory usage and time, but produce approximate results instead of exact results.
+
+- OFFSET() accesses an ARRAY element by position and returns the element. The approximate_quantiles will return an array for each percentile and for
+creating quintiles out of it we will need values at 20, 40 and so on. We save those values as m20, m40 for monetary and f, r for frequency and recency respectively.
+
+```
+SELECT
+a.*,
+--All percentiles for MONETARY
+b.percentiles[offset(20)] AS m20,
+b.percentiles[offset(40)] AS m40,
+b.percentiles[offset(60)] AS m60,
+b.percentiles[offset(80)] AS m80,
+b.percentiles[offset(100)] AS m100,
+--All percentiles for FREQUENCY
+c.percentiles[offset(20)] AS f20,
+c.percentiles[offset(40)] AS f40,
+c.percentiles[offset(60)] AS f60,
+c.percentiles[offset(80)] AS f80,
+c.percentiles[offset(100)] AS f100,
+--All percentiles for RECENCY
+d.percentiles[offset(20)] AS r20,
+d.percentiles[offset(40)] AS r40,
+d.percentiles[offset(60)] AS r60,
+d.percentiles[offset(80)] AS r80,
+d.percentiles[offset(100)] AS r100
+From `customer_segmentation.rfm` a,
+(Select APPROX_QUANTILES(Monetory,100) as percentiles
+from `customer_segmentation.rfm`) b ,
+(Select APPROX_QUANTILES(frequency,100) as percentiles
+from `customer_segmentation.rfm`) c,
+(Select APPROX_QUANTILES(recency,100) as percentiles
+from `customer_segmentation.rfm`) d;
+```
+Output:
+<img src="./Images/ss6.png" alt="result"/>
+
+Again, we save these as a new table named `rfm_groups`.
+
+## Assign scores for each RFM metric :
+Now that we know how each customer fares relative to other customers in terms of RFM values, we can now assign scores from 1 to 5.
+
+Just keep in mind that while with F and M, we give higher scores for higher quintiles, R should be reversed as more recent customers should be scored higher in this metric.
+
+Frequency and Monetary value are combined (as both of them are indicative to purchase volume anyway) to reduce the possible options from 125 to 50.
+
+We will use CASE to get values and assign scores accordingly, so we just get the data from the `quintiles` table that we stored assign scores.
+
+```
+SELECT CustomerID, r_score, f_score, m_score 
+recency, frequency,Monetory,
+CAST(ROUND((f_score + m_score) / 2, 0) AS INT64) AS fm_score
+FROM (
+Select * ,
+CASE WHEN Monetory <= m20 THEN 1
+WHEN Monetory <= m40 AND Monetory > m20 THEN 2
+WHEN Monetory <= m60 AND Monetory > m40 THEN 3
+WHEN Monetory <= m80 AND Monetory > m60 THEN 4
+WHEN Monetory <= m100 AND Monetory > m80 THEN 5
+END AS m_score,
+CASE WHEN frequency <= f20 THEN 1
+WHEN frequency <= f40 AND frequency > f20 THEN 2
+WHEN frequency<= f60 AND frequency > f40 THEN 3
+WHEN frequency <= f80 AND frequency> f60 THEN 4
+WHEN frequency <= f100 AND frequency > f80 THEN 5
+END AS f_score,
+--Recency scoring is reversed
+CASE WHEN recency <= r20 THEN 5
+WHEN recency <= r40 AND recency > r20 THEN 4
+WHEN recency <= r60 AND recency > r40 THEN 3
+WHEN recency <= r80 AND recency > r60 THEN 2
+WHEN recency <= r100 AND recency > r80 THEN 1
+END AS r_score
+From `customer_segmentation.rfm_groups`
+)
+```
+Output:
+<img src="./Images/ss7.png" alt="result"/>
+
+Now you can save this as another table or create a CTE named score for this and use it for further calculations.
+
+## Define the RFM segments using these scores :
+The next step is to combine the scores we obtained to define the RFM segment each customer will belong to.
+As there are 5 groups for each of the R, F, and M metrics, there are 125 potential permutations.
+
+Analysis of the customer RFM values will create some standard segments. The `UK Data & Marketing Association (DMA)` laid out 11 segments, and specified marketing strategies according to their respective characteristics:
+
+<img src="./Images/rfm.jpeg" alt="rfm"/>
+
+- For example, in the Champions segment, customers should have bought recently, bought often, and spent the most. Therefore, their R score should be 5 and their combined FM score should be 4 or 5.
+- On the other hand, Can’t Lose Them customers made the biggest purchases, and often, but haven’t returned for a long time. Hence their R score should be 1, and FM score should be 4 or 5.
+
+After this step, each customer should have an RFM segment assignment like this.
+
+This type of segmentation focuses on the actual buying behavior and ignores the differences in motivations, intentions, and lifestyles of consumers.
+RFM is nonetheless a useful start-off point, and because of its simplicity can be executed fast and in an automated way, giving companies the power to act and decide on business strategies swiftly.
 
