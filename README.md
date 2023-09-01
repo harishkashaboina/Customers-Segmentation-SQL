@@ -304,7 +304,6 @@ FROM customer_segmentation.scores;
 
 After this step, each customer should have an RFM segment assignment like this.
 
-
 This type of segmentation focuses on the actual buying behavior and ignores the differences in motivations, intentions, and lifestyles of consumers.
 RFM is nonetheless a useful start-off point, and because of its simplicity can be executed fast and in an automated way, giving companies the power to act and decide on business strategies swiftly.
 
