@@ -262,7 +262,48 @@ Analysis of the customer RFM values will create some standard segments. The `UK 
 - For example, in the Champions segment, customers should have bought recently, bought often, and spent the most. Therefore, their R score should be 5 and their combined FM score should be 4 or 5.
 - On the other hand, Can’t Lose Them customers made the biggest purchases, and often, but haven’t returned for a long time. Hence their R score should be 1, and FM score should be 4 or 5.
 
+```
+SELECT CustomerID, r_score, f_score, m_score , fm_score,
+recency, frequency,Monetory,
+CASE WHEN (r_score = 5 AND fm_score = 5)
+OR (r_score = 5 AND fm_score = 4)
+OR (r_score = 4 AND fm_score = 5)
+THEN 'Champions'
+WHEN (r_score = 5 AND fm_score =3)
+OR (r_score = 4 AND fm_score = 4)
+OR (r_score = 3 AND fm_score = 5)
+OR (r_score = 3 AND fm_score = 4)
+THEN 'Loyal Customers'
+WHEN (r_score = 5 AND fm_score = 2)
+OR (r_score = 4 AND fm_score = 2)
+OR (r_score = 3 AND fm_score = 3)
+OR (r_score = 4 AND fm_score = 3)
+THEN 'Potential Loyalists'
+WHEN r_score = 5 AND fm_score = 1 THEN 'Recent Customers'
+WHEN (r_score = 4 AND fm_score = 1)
+OR (r_score = 3 AND fm_score = 1)
+THEN 'Promising'
+WHEN (r_score = 3 AND fm_score = 2)
+OR (r_score = 2 AND fm_score = 3)
+OR (r_score = 2 AND fm_score = 2)
+THEN 'Customers Needing Attention'
+WHEN r_score = 2 AND fm_score = 1 THEN 'About to Sleep'
+WHEN (r_score = 2 AND fm_score = 5)
+OR (r_score = 2 AND fm_score = 4)
+OR (r_score = 1 AND fm_score = 3)
+THEN 'At Risk'
+WHEN (r_score = 1 AND fm_score = 5)
+OR (r_score = 1 AND fm_score = 4)
+THEN 'Cant Lose Them'
+WHEN r_score = 1 AND fm_score = 2 THEN 'Hibernating'
+WHEN r_score = 1 AND fm_score = 1 THEN 'Lost'
+END AS rfm_segment
+FROM customer_segmentation.scores;
+```
+<img src="./Images/ss8.png" alt="rfm"/>
+
 After this step, each customer should have an RFM segment assignment like this.
+
 
 This type of segmentation focuses on the actual buying behavior and ignores the differences in motivations, intentions, and lifestyles of consumers.
 RFM is nonetheless a useful start-off point, and because of its simplicity can be executed fast and in an automated way, giving companies the power to act and decide on business strategies swiftly.
